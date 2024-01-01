@@ -13,6 +13,13 @@ import { memoize } from 'vs/base/common/decorators';
 import { URI } from 'vs/base/common/uri';
 
 export const serverOptions: OptionDescriptions<Required<ServerParsedArgs>> = {
+	/* ----- code-server ----- */
+	'disable-update-check': { type: 'boolean' },
+	'auth': { type: 'string' },
+	'disable-file-downloads': { type: 'boolean' },
+	'disable-file-uploads': { type: 'boolean' },
+	'locale': { type: 'string' },
+	'disable-getting-started-override': { type: 'boolean' },
 
 	/* ----- server setup ----- */
 
@@ -91,6 +98,13 @@ export const serverOptions: OptionDescriptions<Required<ServerParsedArgs>> = {
 };
 
 export interface ServerParsedArgs {
+	/* ----- code-server ----- */
+	'disable-update-check'?: boolean;
+	'auth'?: string
+	'disable-file-downloads'?: boolean;
+	'disable-file-uploads'?: boolean;
+	'locale'?: string
+	'disable-getting-started-override'?: boolean,
 
 	/* ----- server setup ----- */
 

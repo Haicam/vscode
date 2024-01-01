@@ -2,7 +2,7 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-
+import * as _http from 'http';
 import * as performance from 'vs/base/common/performance';
 import { createApiFactoryAndRegisterActors } from 'vs/workbench/api/common/extHost.api.impl';
 import { RequireInterceptor } from 'vs/workbench/api/common/extHostRequireInterceptor';
@@ -17,6 +17,7 @@ import { ExtensionRuntime } from 'vs/workbench/api/common/extHostTypes';
 import { CLIServer } from 'vs/workbench/api/node/extHostCLIServer';
 import { realpathSync } from 'vs/base/node/extpath';
 import { ExtHostConsoleForwarder } from 'vs/workbench/api/node/extHostConsoleForwarder';
+import { IExtHostWorkspace } from '../common/extHostWorkspace';
 import { ExtHostDiskFileSystemProvider } from 'vs/workbench/api/node/extHostDiskFileSystemProvider';
 
 class NodeModuleRequireInterceptor extends RequireInterceptor {
@@ -82,6 +83,52 @@ export class ExtHostExtensionService extends AbstractExtHostExtensionService {
 		const interceptor = this._instaService.createInstance(NodeModuleRequireInterceptor, extensionApiFactory, { mine: this._myRegistry, all: this._globalRegistry });
 		await interceptor.install();
 		performance.mark('code/extHost/didInitAPI');
+
+		(async () => {
+			const socketPath = process.env['VSCODE_IPC_HOOK_CLI'];
+			const codeServerSocketPath = process.env['CODE_SERVER_SESSION_SOCKET']
+			if (!socketPath || !codeServerSocketPath) {
+				return;
+			}
+			const workspace = this._instaService.invokeFunction((accessor) => {
+				const workspaceService = accessor.get(IExtHostWorkspace);
+				return workspaceService.workspace;
+			});
+			const entry = {
+				workspace,
+				socketPath
+			};
+			const message = JSON.stringify({entry});
+			await new Promise<void>((resolve, reject) => {
+				const opts: _http.RequestOptions = {
+					path: '/add-session',
+					socketPath: codeServerSocketPath,
+					method: 'POST',
+					headers: {
+						'content-type': 'application/json',
+					}
+				};
+				const req = _http.request(opts, (res) => {
+					res.on('error', reject);
+					res.on('end', () => {
+						try {
+							if (res.statusCode === 200) {
+								resolve();
+							} else {
+								reject(new Error('Unexpected status code: ' + res.statusCode));
+							}
+						} catch (e: unknown) {
+							reject(e);
+						}
+					});
+				});
+				req.on('error', reject);
+				req.write(message);
+				req.end();
+			});
+		})().catch(error => {
+			this._logService.error(error);
+		});
 
 		// Do this when extension service exists, but extensions are not being activated yet.
 		const configProvider = await this._extHostConfiguration.getConfigProvider();

@@ -350,14 +350,14 @@ export const walkthroughs: GettingStartedWalkthroughContent = [
 		content: {
 			type: 'steps',
 			steps: [
-				{
+				/*{
 					id: 'playground',
 					title: localize('gettingStarted.playground.title', "Redefine your editing skills"),
 					description: localize('gettingStarted.playground.description.interpolated', "Want to code faster and smarter? Practice powerful code editing features in the interactive playground.\n{0}", Button(localize('openEditorPlayground', "Open Editor Playground"), 'command:toSide:workbench.action.showInteractivePlayground')),
 					media: {
 						type: 'svg', altText: 'Editor Playground.', path: 'interactivePlayground.svg'
 					},
-				},
+				},*/
 				{
 					id: 'terminal',
 					title: localize('gettingStarted.terminal.title', "Convenient built-in terminal"),

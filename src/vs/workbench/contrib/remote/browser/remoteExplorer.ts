@@ -76,7 +76,7 @@ export class ForwardedPortsView extends Disposable implements IWorkbenchContribu
 			this.contextKeyListener = undefined;
 		}
 
-		const viewEnabled: boolean = !!forwardedPortsViewEnabled.getValue(this.contextKeyService);
+		const viewEnabled: boolean = true;
 
 		if (viewEnabled) {
 			const viewContainer = await this.getViewContainer();

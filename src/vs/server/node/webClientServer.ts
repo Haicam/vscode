@@ -27,6 +27,7 @@ import { URI } from 'vs/base/common/uri';
 import { streamToBuffer } from 'vs/base/common/buffer';
 import { IProductConfiguration } from 'vs/base/common/product';
 import { isString } from 'vs/base/common/types';
+import { getLocaleFromConfig, getNLSConfiguration } from 'vs/server/node/remoteLanguagePacks';
 import { CharCode } from 'vs/base/common/charCode';
 import { getRemoteServerRootPath } from 'vs/platform/remote/common/remoteHosts';
 import { IExtensionManifest } from 'vs/platform/extensions/common/extensions';
@@ -113,7 +114,7 @@ export class WebClientServer {
 		const serverRootPath = getRemoteServerRootPath(_productService);
 		this._staticRoute = `${serverRootPath}/static`;
 		this._callbackRoute = `${serverRootPath}/callback`;
-		this._webExtensionRoute = `${serverRootPath}/web-extension-resource`;
+		this._webExtensionRoute = `/web-extension-resource`;
 	}
 
 	/**
@@ -269,16 +270,15 @@ export class WebClientServer {
 			return void res.end();
 		}
 
-		const getFirstHeader = (headerName: string) => {
-			const val = req.headers[headerName];
-			return Array.isArray(val) ? val[0] : val;
-		};
-
 		const useTestResolver = (!this._environmentService.isBuilt && this._environmentService.args['use-test-resolver']);
+		// For now we are getting the remote authority from the client to avoid
+		// needing specific configuration for reverse proxies to work.  Set this to
+		// something invalid to make sure we catch code that is using this value
+		// from the backend when it should not.
 		const remoteAuthority = (
 			useTestResolver
 				? 'test+test'
-				: (getFirstHeader('x-original-host') || getFirstHeader('x-forwarded-host') || req.headers.host)
+				: 'remote'
 		);
 		if (!remoteAuthority) {
 			return serveError(req, res, 400, `Bad request.`);
@@ -305,16 +305,22 @@ export class WebClientServer {
 			scopes: [['user:email'], ['repo']]
 		} : undefined;
 
+		const base = relativeRoot(getOriginalUrl(req))
+		const vscodeBase = relativePath(getOriginalUrl(req))
+
 		const productConfiguration = <Partial<IProductConfiguration>>{
+			codeServerVersion: this._productService.codeServerVersion,
+			rootEndpoint: base,
+			updateEndpoint: !this._environmentService.args['disable-update-check'] ? base + '/update/check' : undefined,
+			logoutEndpoint: this._environmentService.args['auth'] && this._environmentService.args['auth'] !== "none" ? base + '/logout' : undefined,
+			proxyEndpointTemplate: process.env.VSCODE_PROXY_URI ?? base + '/proxy/{{port}}/',
+			serviceWorker: {
+				scope: vscodeBase + '/',
+				path: base + '/_static/out/browser/serviceWorker.js',
+			},
+			enableTelemetry: this._productService.enableTelemetry,
 			embedderIdentifier: 'server-distro',
-			extensionsGallery: this._webExtensionResourceUrlTemplate ? {
-				...this._productService.extensionsGallery,
-				'resourceUrlTemplate': this._webExtensionResourceUrlTemplate.with({
-					scheme: 'http',
-					authority: remoteAuthority,
-					path: `${this._webExtensionRoute}/${this._webExtensionResourceUrlTemplate.authority}${this._webExtensionResourceUrlTemplate.path}`
-				}).toString(true)
-			} : undefined
+			extensionsGallery: this._productService.extensionsGallery,
 		};
 
 		if (!this._environmentService.isBuilt) {
@@ -326,6 +332,11 @@ export class WebClientServer {
 
 		const workbenchWebConfiguration = {
 			remoteAuthority,
+			webviewEndpoint: vscodeBase + this._staticRoute + '/out/vs/workbench/contrib/webview/browser/pre',
+			userDataPath: this._environmentService.userDataPath,
+			isEnabledFileDownloads: !this._environmentService.args['disable-file-downloads'],
+			isEnabledFileUploads: !this._environmentService.args['disable-file-uploads'],
+			isEnabledCoderGettingStarted: !this._environmentService.args['disable-getting-started-override'],
 			_wrapWebWorkerExtHostInIframe,
 			developmentOptions: { enableSmokeTestDriver: this._environmentService.args['enable-smoke-test-driver'] ? true : undefined, logLevel: this._logService.getLevel() },
 			settingsSyncOptions: !this._environmentService.isBuilt && this._environmentService.args['enable-sync'] ? { enabled: true } : undefined,
@@ -336,12 +347,17 @@ export class WebClientServer {
 			callbackRoute: this._callbackRoute
 		};
 
+		const locale = this._environmentService.args.locale || await getLocaleFromConfig(this._environmentService.argvResource.fsPath);
+		const nlsConfiguration = await getNLSConfiguration(locale, this._environmentService.userDataPath)
 		const nlsBaseUrl = this._productService.extensionsGallery?.nlsBaseUrl;
 		const values: { [key: string]: string } = {
 			WORKBENCH_WEB_CONFIGURATION: asJSON(workbenchWebConfiguration),
 			WORKBENCH_AUTH_SESSION: authSessionInfo ? asJSON(authSessionInfo) : '',
-			WORKBENCH_WEB_BASE_URL: this._staticRoute,
-			WORKBENCH_NLS_BASE_URL: nlsBaseUrl ? `${nlsBaseUrl}${!nlsBaseUrl.endsWith('/') ? '/' : ''}${this._productService.commit}/${this._productService.version}/` : '',
+			WORKBENCH_WEB_BASE_URL: vscodeBase + this._staticRoute,
+			WORKBENCH_NLS_BASE_URL: vscodeBase + (nlsBaseUrl ? `${nlsBaseUrl}${!nlsBaseUrl.endsWith('/') ? '/' : ''}${this._productService.commit}/${this._productService.version}/` : ''),
+			BASE: base,
+			VS_BASE: vscodeBase,
+			NLS_CONFIGURATION: asJSON(nlsConfiguration),
 		};
 
 		if (useTestResolver) {
@@ -366,7 +382,7 @@ export class WebClientServer {
 			'default-src \'self\';',
 			'img-src \'self\' https: data: blob:;',
 			'media-src \'self\';',
-			`script-src 'self' 'unsafe-eval' ${this._getScriptCspHashes(data).join(' ')} 'sha256-fh3TwPMflhsEIpR8g1OYTIMVWhXTLcjQ9kh2tIpmv54=' ${useTestResolver ? '' : `http://${remoteAuthority}`};`, // the sha is the same as in src/vs/workbench/services/extensions/worker/webWorkerExtensionHostIframe.html
+			`script-src 'self' 'unsafe-eval' ${this._getScriptCspHashes(data).join(' ')} 'sha256-fh3TwPMflhsEIpR8g1OYTIMVWhXTLcjQ9kh2tIpmv54=' ${useTestResolver ? '' : ''};`, // the sha is the same as in src/vs/workbench/services/extensions/worker/webWorkerExtensionHostIframe.html
 			'child-src \'self\';',
 			`frame-src 'self' https://*.vscode-cdn.net data:;`,
 			'worker-src \'self\' data: blob:;',
@@ -438,4 +454,71 @@ export class WebClientServer {
 		});
 		return void res.end(data);
 	}
+}
+
+/**
+ * Remove extra slashes in a URL.
+ *
+ * This is meant to fill the job of `path.join` so you can concatenate paths and
+ * then normalize out any extra slashes.
+ *
+ * If you are using `path.join` you do not need this but note that `path` is for
+ * file system paths, not URLs.
+ */
+export const normalizeUrlPath = (url: string, keepTrailing = false): string => {
+	return url.replace(/\/\/+/g, "/").replace(/\/+$/, keepTrailing ? "/" : "")
+}
+
+/**
+ * Get the relative path that will get us to the root of the page. For each
+ * slash we need to go up a directory.  Will not have a trailing slash.
+ *
+ * For example:
+ *
+ * / => .
+ * /foo => .
+ * /foo/ => ./..
+ * /foo/bar => ./..
+ * /foo/bar/ => ./../..
+ *
+ * All paths must be relative in order to work behind a reverse proxy since we
+ * we do not know the base path.  Anything that needs to be absolute (for
+ * example cookies) must get the base path from the frontend.
+ *
+ * All relative paths must be prefixed with the relative root to ensure they
+ * work no matter the depth at which they happen to appear.
+ *
+ * For Express `req.originalUrl` should be used as they remove the base from the
+ * standard `url` property making it impossible to get the true depth.
+ */
+export const relativeRoot = (originalUrl: string): string => {
+	const depth = (originalUrl.split("?", 1)[0].match(/\//g) || []).length
+	return normalizeUrlPath("./" + (depth > 1 ? "../".repeat(depth - 1) : ""))
+}
+
+/**
+ * Get the relative path to the current resource.
+ *
+ * For example:
+ *
+ * / => .
+ * /foo => ./foo
+ * /foo/ => .
+ * /foo/bar => ./bar
+ * /foo/bar/ => .
+ */
+export const relativePath = (originalUrl: string): string => {
+	const parts = originalUrl.split("?", 1)[0].split("/")
+	return normalizeUrlPath("./" + parts[parts.length - 1])
+}
+
+/**
+ * code-server serves Code using Express.  Express removes the base from the url
+ * and puts the original in `originalUrl` so we must use this to get the correct
+ * depth.  Code is not aware it is behind Express so the types do not match.  We
+ * may want to continue moving code into Code and eventually remove the Express
+ * wrapper or move the web server back into code-server.
+ */
+export const getOriginalUrl = (req: http.IncomingMessage): string => {
+	return (req as any).originalUrl || req.url
 }

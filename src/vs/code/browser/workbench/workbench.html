@@ -11,7 +11,8 @@
 		<meta name="mobile-web-app-capable" content="yes" />
 		<meta name="apple-mobile-web-app-capable" content="yes" />
 		<meta name="apple-mobile-web-app-title" content="Code">
-		<link rel="apple-touch-icon" href="{{WORKBENCH_WEB_BASE_URL}}/resources/server/code-192.png" />
+		<link rel="apple-touch-icon" sizes="192x192" href="{{BASE}}/_static/src/browser/media/pwa-icon-192.png" />
+		<link rel="apple-touch-icon" sizes="512x512" href="{{BASE}}/_static/src/browser/media/pwa-icon-512.png" />
 
 		<!-- Disable pinch zooming -->
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
@@ -22,9 +23,13 @@
 		<!-- Workbench Auth Session -->
 		<meta id="vscode-workbench-auth-session" data-settings="{{WORKBENCH_AUTH_SESSION}}">
 
+		<!-- NLS Configuration -->
+		<meta id="vscode-remote-nls-configuration" data-settings="{{NLS_CONFIGURATION}}">
+
 		<!-- Workbench Icon/Manifest/CSS -->
-		<link rel="icon" href="{{WORKBENCH_WEB_BASE_URL}}/resources/server/favicon.ico" type="image/x-icon" />
-		<link rel="manifest" href="{{WORKBENCH_WEB_BASE_URL}}/resources/server/manifest.json" crossorigin="use-credentials" />
+		<link rel="icon" href="{{BASE}}/_static/src/browser/media/favicon-dark-support.svg" />
+		<link rel="alternate icon" href="{{BASE}}/_static/src/browser/media/favicon.ico" type="image/x-icon" />
+		<link rel="manifest" href="{{VS_BASE}}/manifest.json" crossorigin="use-credentials" />
 		<link data-name="vs/workbench/workbench.web.main" rel="stylesheet" href="{{WORKBENCH_WEB_BASE_URL}}/out/vs/workbench/workbench.web.main.css">
 
 	</head>
@@ -36,7 +41,7 @@
 	<script src="{{WORKBENCH_WEB_BASE_URL}}/out/vs/loader.js"></script>
 	<script src="{{WORKBENCH_WEB_BASE_URL}}/out/vs/webPackagePaths.js"></script>
 	<script>
-		const baseUrl = new URL('{{WORKBENCH_WEB_BASE_URL}}', window.location.origin).toString();
+		const baseUrl = new URL('{{WORKBENCH_WEB_BASE_URL}}', window.location).toString();
 		Object.keys(self.webPackagePaths).map(function (key, index) {
 			self.webPackagePaths[key] = `${baseUrl}/node_modules/${key}/${self.webPackagePaths[key]}`;
 		});
@@ -46,15 +51,26 @@
 		// Normalize locale to lowercase because translationServiceUrl is case-sensitive.
 		// ref: https://github.com/microsoft/vscode/issues/187795
 		const locale = window.localStorage.getItem('vscode.nls.locale') || navigator.language.toLowerCase();
-		if (!locale.startsWith('en')) {
-			nlsConfig['vs/nls'] = {
-				availableLanguages: {
-					'*': locale
-				},
-				translationServiceUrl: '{{WORKBENCH_NLS_BASE_URL}}'
-			};
-		}
-
+		try {
+			nlsConfig['vs/nls'] = JSON.parse(document.getElementById("vscode-remote-nls-configuration").getAttribute("data-settings"))
+			if (nlsConfig['vs/nls']._resolvedLanguagePackCoreLocation) {
+				const bundles = Object.create(null)
+				nlsConfig['vs/nls'].loadBundle = (bundle, _language, cb) => {
+					const result = bundles[bundle]
+					if (result) {
+						return cb(undefined, result)
+					}
+					const path = nlsConfig['vs/nls']._resolvedLanguagePackCoreLocation + "/" + bundle.replace(/\//g, "!") + ".nls.json"
+					fetch(`{{WORKBENCH_WEB_BASE_URL}}/../vscode-remote-resource?path=${encodeURIComponent(path)}`)
+						.then((response) => response.json())
+						.then((json) => {
+							bundles[bundle] = json
+							cb(undefined, json)
+						})
+						.catch(cb)
+				}
+			}
+		} catch (error) { /* Probably fine. */ }
 		require.config({
 			baseUrl: `${baseUrl}/out`,
 			recordStats: true,

@@ -20,7 +20,7 @@ import { CLOSE_SAVED_EDITORS_COMMAND_ID, CLOSE_EDITORS_IN_GROUP_COMMAND_ID, CLOS
 import { AutoSaveAfterShortDelayContext } from 'vs/workbench/services/filesConfiguration/common/filesConfigurationService';
 import { WorkbenchListDoubleSelection } from 'vs/platform/list/browser/listService';
 import { Schemas } from 'vs/base/common/network';
-import { DirtyWorkingCopiesContext, EnterMultiRootWorkspaceSupportContext, HasWebFileSystemAccess, WorkbenchStateContext, WorkspaceFolderCountContext, SidebarFocusContext, ActiveEditorCanRevertContext, ActiveEditorContext, ResourceContextKey, ActiveEditorAvailableEditorIdsContext } from 'vs/workbench/common/contextkeys';
+import { DirtyWorkingCopiesContext, EnterMultiRootWorkspaceSupportContext, HasWebFileSystemAccess, WorkbenchStateContext, WorkspaceFolderCountContext, SidebarFocusContext, ActiveEditorCanRevertContext, ActiveEditorContext, ResourceContextKey, ActiveEditorAvailableEditorIdsContext, IsEnabledFileDownloads, IsEnabledFileUploads } from 'vs/workbench/common/contextkeys';
 import { IsWebContext } from 'vs/platform/contextkey/common/contextkeys';
 import { ServicesAccessor } from 'vs/platform/instantiation/common/instantiation';
 import { ThemeIcon } from 'vs/base/common/themables';
@@ -549,13 +549,16 @@ MenuRegistry.appendMenuItem(MenuId.ExplorerContext, ({
 		id: DOWNLOAD_COMMAND_ID,
 		title: DOWNLOAD_LABEL
 	},
-	when: ContextKeyExpr.or(
-		// native: for any remote resource
-		ContextKeyExpr.and(IsWebContext.toNegated(), ResourceContextKey.Scheme.notEqualsTo(Schemas.file)),
-		// web: for any files
-		ContextKeyExpr.and(IsWebContext, ExplorerFolderContext.toNegated(), ExplorerRootContext.toNegated()),
-		// web: for any folders if file system API support is provided
-		ContextKeyExpr.and(IsWebContext, HasWebFileSystemAccess)
+	when: ContextKeyExpr.and(
+		IsEnabledFileDownloads,
+		ContextKeyExpr.or(
+			// native: for any remote resource
+			ContextKeyExpr.and(IsWebContext.toNegated(), ResourceContextKey.Scheme.notEqualsTo(Schemas.file)),
+			// web: for any files
+			ContextKeyExpr.and(IsWebContext, ExplorerFolderContext.toNegated(), ExplorerRootContext.toNegated()),
+			// web: for any folders if file system API support is provided
+			ContextKeyExpr.and(IsWebContext, HasWebFileSystemAccess)
+		)
 	)
 }));
 
@@ -567,6 +570,7 @@ MenuRegistry.appendMenuItem(MenuId.ExplorerContext, ({
 		title: UPLOAD_LABEL,
 	},
 	when: ContextKeyExpr.and(
+		IsEnabledFileUploads,
 		// only in web
 		IsWebContext,
 		// only on folders

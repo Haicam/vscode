@@ -10,7 +10,7 @@ import { IInstantiationService } from 'vs/platform/instantiation/common/instanti
 import { IEditorSerializer, IEditorOpenContext } from 'vs/workbench/common/editor';
 import { DisposableStore, toDisposable } from 'vs/base/common/lifecycle';
 import { assertIsDefined } from 'vs/base/common/types';
-import { $, addDisposableListener, append, clearNode, Dimension, reset } from 'vs/base/browser/dom';
+import { $, addDisposableListener, append, clearNode, Dimension, reset, prepend } from 'vs/base/browser/dom';
 import { ICommandService } from 'vs/platform/commands/common/commands';
 import { IProductService } from 'vs/platform/product/common/productService';
 import { hiddenEntriesConfigurationKey, IResolvedWalkthrough, IResolvedWalkthroughStep, IWalkthroughsService } from 'vs/workbench/contrib/welcomeGettingStarted/browser/gettingStartedService';
@@ -59,7 +59,7 @@ import { GettingStartedIndexList } from './gettingStartedList';
 import { StandardKeyboardEvent } from 'vs/base/browser/keyboardEvent';
 import { KeyCode } from 'vs/base/common/keyCodes';
 import { getTelemetryLevel } from 'vs/platform/telemetry/common/telemetryUtils';
-import { WorkbenchStateContext } from 'vs/workbench/common/contextkeys';
+import { IsEnabledCoderGettingStarted, WorkbenchStateContext } from 'vs/workbench/common/contextkeys';
 import { OpenFolderAction, OpenFileFolderAction, OpenFolderViaWorkspaceAction } from 'vs/workbench/browser/actions/workspaceActions';
 import { OpenRecentAction } from 'vs/workbench/browser/actions/windowActions';
 import { Toggle } from 'vs/base/browser/ui/toggle/toggle';
@@ -788,10 +788,81 @@ export class GettingStartedPage extends EditorPane {
 			onShowOnStartupChanged();
 		}));
 
-		const header = $('.header', {},
+		/*const header = $('.header', {},
 			$('h1.product-name.caption', {}, this.productService.nameLong),
 			$('p.subtitle.description', {}, localize({ key: 'gettingStarted.editingEvolved', comment: ['Shown as subtitle on the Welcome page.'] }, "Editing evolved"))
+		);*/
+
+		const header = $('.header', {},
+			$('h1.product-name.caption', {}, "JuniorIT.AI"),
+			$('p.subtitle.description', {}, "The future of coding with AI")
 		);
+
+		let gettingStartedCoder: HTMLElement = $('.header', {});
+		if (this.contextService.contextMatchesRules(IsEnabledCoderGettingStarted)) {
+			gettingStartedCoder = $('.gettingStartedCategory', {},
+				$('h2', {
+					style: 'margin-bottom: 12px',
+				}, 'Next Up'),
+				$('a', {
+					href: 'https://cdr.co/code-server-to-coder',
+					target: '_blank',
+				},
+					$('button', {
+						style: [
+							'padding: 10px 16px	',
+							'border-radius: 4px',
+							'background: linear-gradient(94.04deg, #7934DA 0%, #4D52E0 101.2%)',
+							'color: white',
+							'overflow: hidden',
+							'margin-right: 14px',
+						].join(';'),
+					},
+					$('h3', {
+						style: [
+							'margin: 0px 0px 6px',
+							'font-weight: 500',
+						].join(';'),
+					}, 'Deploy code-server for your team'),
+					$('p', {
+						style: [
+							'margin: 0',
+							'font-size: 13px',
+							'color: #dcdee2',
+						].join(';'),
+					}, 'Provision software development environments on your infrastructure with Coder.'),
+					$('p', {
+						style: [
+							'margin-top: 8px',
+							'font-size: 13px',
+							'color: #dcdee2',
+						].join(';'),
+					}, 'Coder is a self-service portal which provisions via Terraform—Linux, macOS, Windows, x86, ARM, and, of course, Kubernetes based infrastructure.'),
+					$('p', {
+						style: [
+							'margin: 0',
+							'margin-top: 8px',
+							'font-size: 13px',
+							'display: flex',
+							'align-items: center',
+						].join(';'),
+					}, 'Get started ', $('span', {
+						class: ThemeIcon.asClassName(Codicon.arrowRight),
+						style: [
+							'color: white',
+							'margin-left: 8px',
+						].join(';'),
+					})),
+					$('img', {
+						src: './_static/src/browser/media/templates.png',
+						style: [
+							'margin-bottom: -65px',
+						].join(';'),
+					}),
+					),
+				),
+			);
+		}
 
 		const leftColumn = $('.categories-column.categories-column-left', {},);
 		const rightColumn = $('.categories-column.categories-column-right', {},);
@@ -841,6 +912,9 @@ export class GettingStartedPage extends EditorPane {
 			} else {
 				recentList.setLimit(5);
 				reset(leftColumn, startList.getDomElement(), recentList.getDomElement());
+			}
+			if (this.contextService.contextMatchesRules(IsEnabledCoderGettingStarted)) {
+				prepend(rightColumn, gettingStartedCoder)
 			}
 		};
 

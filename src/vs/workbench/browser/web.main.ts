@@ -65,6 +65,7 @@ import { mixin, safeStringify } from 'vs/base/common/objects';
 import { IndexedDB } from 'vs/base/browser/indexedDB';
 import { IWorkspace } from 'vs/workbench/services/host/browser/browserHostService';
 import { WebFileSystemAccess } from 'vs/platform/files/browser/webFileSystemAccess';
+import { CodeServerClient } from 'vs/workbench/browser/client';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { IProgressService } from 'vs/platform/progress/common/progress';
 import { DelayedLogChannel } from 'vs/workbench/services/output/common/delayedLogChannel';
@@ -129,6 +130,9 @@ export class BrowserMain extends Disposable {
 
 		// Startup
 		const instantiationService = workbench.startup();
+
+		const codeServerClient = this._register(instantiationService.createInstance(CodeServerClient));
+		await codeServerClient.startup();
 
 		// Window
 		this._register(instantiationService.createInstance(BrowserWindow));

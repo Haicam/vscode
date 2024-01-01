@@ -104,9 +104,13 @@ class RemoteTerminalBackend extends BaseTerminalBackend implements ITerminalBack
 			}
 			const reqId = e.reqId;
 			const commandId = e.commandId;
+			const terminalId = e.persistentProcessId;
 			if (!allowedCommands.includes(commandId)) {
 				this._remoteTerminalChannel.sendCommandResult(reqId, true, 'Invalid remote cli command: ' + commandId);
 				return;
+			}
+			if (typeof terminalId !== "undefined" && !this._ptys.has(terminalId)) {
+				return
 			}
 			const commandArgs = e.commandArgs.map(arg => revive(arg));
 			try {

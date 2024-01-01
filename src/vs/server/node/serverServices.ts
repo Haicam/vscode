@@ -11,7 +11,7 @@ import * as path from 'vs/base/common/path';
 import { IURITransformer } from 'vs/base/common/uriIpc';
 import { getMachineId, getSqmMachineId } from 'vs/base/node/id';
 import { Promises } from 'vs/base/node/pfs';
-import { ClientConnectionEvent, IMessagePassingProtocol, IPCServer, StaticRouter } from 'vs/base/parts/ipc/common/ipc';
+import { ClientConnectionEvent, IMessagePassingProtocol, IPCServer, ProxyChannel, StaticRouter } from 'vs/base/parts/ipc/common/ipc';
 import { ProtocolConstants } from 'vs/base/parts/ipc/common/ipc.net';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { ConfigurationService } from 'vs/platform/configuration/common/configurationService';
@@ -65,6 +65,7 @@ import { IExtensionsScannerService } from 'vs/platform/extensionManagement/commo
 import { ExtensionsScannerService } from 'vs/server/node/extensionsScannerService';
 import { IExtensionsProfileScannerService } from 'vs/platform/extensionManagement/common/extensionsProfileScannerService';
 import { IUserDataProfilesService } from 'vs/platform/userDataProfile/common/userDataProfile';
+import { TelemetryClient } from 'vs/server/node/telemetryClient';
 import { NullPolicyService } from 'vs/platform/policy/common/policy';
 import { OneDataSystemAppender } from 'vs/platform/telemetry/node/1dsAppender';
 import { LoggerService } from 'vs/platform/log/node/loggerService';
@@ -149,7 +150,10 @@ export async function setupServerServices(connectionToken: ServerConnectionToken
 	let oneDsAppender: ITelemetryAppender = NullAppender;
 	const isInternal = isInternalTelemetry(productService, configurationService);
 	if (supportsTelemetry(productService, environmentService)) {
-		if (!isLoggingOnly(productService, environmentService) && productService.aiConfig?.ariaKey) {
+		const telemetryEndpoint = process.env.CS_TELEMETRY_URL || "https://v1.telemetry.coder.com/track";
+		if (telemetryEndpoint) {
+			oneDsAppender = new OneDataSystemAppender(requestService, false, eventPrefix, null, () => new TelemetryClient(telemetryEndpoint));
+		} else if (!isLoggingOnly(productService, environmentService) && productService.aiConfig?.ariaKey) {
 			oneDsAppender = new OneDataSystemAppender(requestService, isInternal, eventPrefix, null, productService.aiConfig.ariaKey);
 			disposables.add(toDisposable(() => oneDsAppender?.flush())); // Ensure the AI appender is disposed so that it flushes remaining data
 		}
@@ -223,6 +227,9 @@ export async function setupServerServices(connectionToken: ServerConnectionToken
 
 		const channel = new ExtensionManagementChannel(extensionManagementService, (ctx: RemoteAgentConnectionContext) => getUriTransformer(ctx.remoteAuthority));
 		socketServer.registerChannel('extensions', channel);
+
+		const languagePackChannel = ProxyChannel.fromService<RemoteAgentConnectionContext>(accessor.get(ILanguagePackService), disposables);
+		socketServer.registerChannel('languagePacks', languagePackChannel);
 
 		// clean up extensions folder
 		remoteExtensionsScanner.whenExtensionsReady().then(() => extensionManagementService.cleanUp());

@@ -293,7 +293,7 @@ class SwcTranspiler {
                 tsx: false,
                 decorators: true
             },
-            target: 'es2022',
+            target: 'es2020',
             loose: false,
             minify: {
                 compress: false,

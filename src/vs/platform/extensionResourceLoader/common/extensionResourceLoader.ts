@@ -16,8 +16,6 @@ import { getServiceMachineId } from 'vs/platform/externalServices/common/service
 import { IStorageService } from 'vs/platform/storage/common/storage';
 import { TelemetryLevel } from 'vs/platform/telemetry/common/telemetry';
 import { getTelemetryLevel, supportsTelemetry } from 'vs/platform/telemetry/common/telemetryUtils';
-import { RemoteAuthorities } from 'vs/base/common/network';
-import { getRemoteServerRootPath } from 'vs/platform/remote/common/remoteHosts';
 import { TargetPlatform } from 'vs/platform/extensions/common/extensions';
 
 const WEB_EXTENSION_RESOURCE_END_POINT = 'web-extension-resource';
@@ -78,7 +76,7 @@ export abstract class AbstractExtensionResourceLoaderService implements IExtensi
 		private readonly _environmentService: IEnvironmentService,
 		private readonly _configurationService: IConfigurationService,
 	) {
-		this._webExtensionResourceEndPoint = `${getRemoteServerRootPath(_productService)}/${WEB_EXTENSION_RESOURCE_END_POINT}/`;
+		this._webExtensionResourceEndPoint = `/${WEB_EXTENSION_RESOURCE_END_POINT}/`;
 		if (_productService.extensionsGallery) {
 			this._extensionGalleryResourceUrlTemplate = _productService.extensionsGallery.resourceUrlTemplate;
 			this._extensionGalleryAuthority = this._extensionGalleryResourceUrlTemplate ? this._getExtensionGalleryAuthority(URI.parse(this._extensionGalleryResourceUrlTemplate)) : undefined;
@@ -102,7 +100,7 @@ export abstract class AbstractExtensionResourceLoaderService implements IExtensi
 					: version,
 				path: 'extension'
 			}));
-			return this._isWebExtensionResourceEndPoint(uri) ? uri.with({ scheme: RemoteAuthorities.getPreferredWebSchema() }) : uri;
+			return this._isWebExtensionResourceEndPoint(uri) ? URI.joinPath(URI.parse(window.location.href), uri.path) : uri;
 		}
 		return undefined;
 	}
